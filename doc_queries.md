@@ -304,3 +304,78 @@ ORDER BY veces_repetido DESC;
 ```
 
 **Función:** Identificar valores duplicados en las columnas principales de la tabla.
+
+--🔎 Identificación y Tratamiento de Valores Atípicos en Spotify Dataset
+
+Este trabajo se centra en la limpieza y exploración de valores atípicos en distintas tablas de un dataset de Spotify y plataformas de competencia.
+
+1. Tablas utilizadas
+
+track_in_spotify_clean → Información de canciones en Spotify.
+
+technical_info_clean → Información técnica de cada track (BPM, energía, valencia, etc.).
+
+competition_info_clean → Presencia de canciones en Apple, Deezer y Shazam.
+
+2. Variables categóricas analizadas
+
+track_name y artist_s__name:
+
+Se usaron expresiones LIKE y REGEXP para detectar inconsistencias de texto, como:
+
+Presencia de "feat.", "ft.", etc.
+
+Caracteres especiales innecesarios (@, #, !, etc.).
+
+Uso indebido de mayúsculas/minúsculas.
+
+Ejemplo:
+
+SELECT artist_s__name
+FROM `spotify2023_base.track_in_spotify_clean`
+WHERE artist_s__name LIKE '%feat%' OR artist_s__name LIKE '%ft.%';
+
+
+Para limpieza:
+
+SELECT 
+  artist_s__name,
+  REGEXP_REPLACE(artist_s__name, r'[^a-zA-Z0-9, ]','') AS artist_name_limpio
+FROM `spotify2023_base.track_in_spotify_clean`;
+
+3. Variables numéricas analizadas
+
+Se calcularon mínimos, máximos y promedios con el objetivo de identificar outliers y validar rangos.
+
+Ejemplo de consulta:
+SELECT
+  MIN(streams) AS min_streams,
+  MAX(streams) AS max_streams,
+  AVG(streams) AS avg_streams
+FROM `spotify2023_base.track_in_spotify_clean`;
+
+Resultados clave:
+
+Streams: Sirve para ver la canción menos y más reproducida, y la media general.
+
+BPM: Valores fuera de rango (ej: mayores a 300) se consideran atípicos.
+
+Danceability, Energy, Valence, etc.: MIN y MAX deben estar entre 0 y 100. Valores fuera de este rango son errores.
+
+Competition (Apple, Deezer, Shazam):
+
+MIN = 0 es esperado (canciones sin presencia).
+
+MAX ayuda a encontrar las canciones más populares.
+
+AVG indica el promedio de exposición en cada plataforma.
+
+4. Principales hallazgos
+
+Se detectó un registro en streams con valores de tokens técnicos en lugar de números → fue reemplazado por 0.
+
+En artist_s__name, se identificó que algunos artistas estaban listados como cadenas separadas por comas. Lo correcto sería dividirlos en múltiples filas en lugar de eliminar la coma.
+
+Variables como mode (solo contiene “major” y “minor”) no requieren estandarización, pero se verificó su consistencia con REGEXP_REPLACE.
+
+Las métricas de MIN, MAX y AVG permiten identificar canciones con desempeño extremo y posibles errores de carga en las tablas.
