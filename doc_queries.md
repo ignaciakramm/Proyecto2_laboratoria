@@ -305,77 +305,144 @@ ORDER BY veces_repetido DESC;
 
 **Función:** Identificar valores duplicados en las columnas principales de la tabla.
 
---🔎 Identificación y Tratamiento de Valores Atípicos en Spotify Dataset
+# Limpieza y detección de valores atípicos en Spotify
 
-Este trabajo se centra en la limpieza y exploración de valores atípicos en distintas tablas de un dataset de Spotify y plataformas de competencia.
+## 1. Limpieza de nombres de artistas
 
-1. Tablas utilizadas
-
-track_in_spotify_clean → Información de canciones en Spotify.
-
-technical_info_clean → Información técnica de cada track (BPM, energía, valencia, etc.).
-
-competition_info_clean → Presencia de canciones en Apple, Deezer y Shazam.
-
-2. Variables categóricas analizadas
-
-track_name y artist_s__name:
-
-Se usaron expresiones LIKE y REGEXP para detectar inconsistencias de texto, como:
-
-Presencia de "feat.", "ft.", etc.
-
-Caracteres especiales innecesarios (@, #, !, etc.).
-
-Uso indebido de mayúsculas/minúsculas.
-
-Ejemplo:
-
-SELECT artist_s__name
-FROM `spotify2023_base.track_in_spotify_clean`
-WHERE artist_s__name LIKE '%feat%' OR artist_s__name LIKE '%ft.%';
-
-
-Para limpieza:
-
+```sql
+-- Limpieza de caracteres no deseados en artist_s__name
 SELECT 
   artist_s__name,
-  REGEXP_REPLACE(artist_s__name, r'[^a-zA-Z0-9, ]','') AS artist_name_limpio
+  REGEXP_REPLACE(artist_s__name, r'[^a-zA-Z0-9,]', ' ') AS artist_name_limpio
+FROM `spotify2023_base.track_in_spotify_clean`;
+-- reemplaza cualquier carácter especial (acentos, paréntesis, comas, puntos, guiones, etc.) por un espacio. NOMBRE DE CANCIÓN
+SELECT track_name, 
+REGEXP_REPLACE(track_name, r'[^a-zA-Z0-9]',' ') AS track_name_limpio
 FROM `spotify2023_base.track_in_spotify_clean`;
 
-3. Variables numéricas analizadas
+```
 
-Se calcularon mínimos, máximos y promedios con el objetivo de identificar outliers y validar rangos.
+**Función:** Mantener las comas y eliminar caracteres extraños de los nombres de artistas para estandarizar la columna.
 
-Ejemplo de consulta:
+---
+
+## 2. Normalización de columna `mode`
+
+```sql
+-- Normalización de valores en "mode"
+SELECT 
+  mode,
+  REGEXP_REPLACE(LOWER(mode), r'[^a-z]', '') AS mode_estandarizado
+FROM `spotify2023_base.technical_info_clean`;
+```
+
+**Función:** Unificar valores de "mode" en categorías válidas (major/minor), evitando inconsistencias de mayúsculas o caracteres extra.
+
+---
+
+## 3. Estadísticas descriptivas para detección de outliers
+
+```sql
+-- Ejemplo con in_apple_playlists
+SELECT 
+  MIN(in_apple_playlists) AS min_val, 
+  MAX(in_apple_playlists) AS max_val, 
+  AVG(in_apple_playlists) AS avg_val
+FROM `spotify2023_base.competition_info_clean`;
+```
+
+**Función:** Calcular mínimo, máximo y promedio para detectar valores nulos, extremos o atípicos. Repetir para otras métricas (in_apple_charts, in_deezer_playlists, in_deezer_charts, in_shazam_charts).
+
+---
+
+## 4. Duplicados en columnas principales
+
+```sql
+-- Duplicados en track_id
+SELECT track_id, COUNT(*) AS veces_repetido
+FROM `spotify2023_base.technical_info`
+GROUP BY track_id
+HAVING COUNT(*) > 1
+ORDER BY veces_repetido DESC;
+
+-- Duplicados en bpm
+SELECT bpm, COUNT(*) AS veces_repetido
+FROM `spotify2023_base.technical_info`
+GROUP BY bpm
+HAVING COUNT(*) > 1
+ORDER BY veces_repetido DESC;
+
+-- Duplicados en key
+SELECT `key`, COUNT(*) AS veces_repetido
+FROM `spotify2023_base.technical_info`
+GROUP BY `key`
+HAVING COUNT(*) > 1
+ORDER BY veces_repetido DESC;
+
+-- Duplicados en mode
+SELECT `mode`, COUNT(*) AS veces_repetido
+FROM `spotify2023_base.technical_info`
+GROUP BY `mode`
+HAVING COUNT(*) > 1
+ORDER BY veces_repetido DESC;
+```
+
+**Función:** Identificar valores duplicados para validar la consistencia de los datos antes de análisis adicionales.
+
+---
+
+## 5. Estadísticas de columnas enteras en track_in_spotify_clean
+
+```sql
 SELECT
-  MIN(streams) AS min_streams,
-  MAX(streams) AS max_streams,
-  AVG(streams) AS avg_streams
+  MIN(first_release_day),
+  MAX(first_release_day),
+  AVG(first_release_day)
 FROM `spotify2023_base.track_in_spotify_clean`;
+```
 
-Resultados clave:
+**Función:** Obtener rangos y promedio para columnas numéricas, útil para detección de valores atípicos o errores de captura.
 
-Streams: Sirve para ver la canción menos y más reproducida, y la media general.
+---
 
-BPM: Valores fuera de rango (ej: mayores a 300) se consideran atípicos.
+## 6. Estadísticas de columnas enteras en technical_info_clean
 
-Danceability, Energy, Valence, etc.: MIN y MAX deben estar entre 0 y 100. Valores fuera de este rango son errores.
+```sql
+SELECT
+  MIN(bpm), MAX(bpm), AVG(bpm),
+  MIN(`danceability_%`), MAX(`danceability_%`), AVG(`danceability_%`),
+  MIN(`valence_%`), MAX(`valence_%`), AVG(`valence_%`),
+  MIN(`energy_%`), MAX(`energy_%`), AVG(`energy_%`),
+  MIN(`acousticness_%`), MAX(`acousticness_%`), AVG(`acousticness_%`),
+  MIN(`instrumentalness_%`), MAX(`instrumentalness_%`), AVG(`instrumentalness_%`),
+  MIN(`liveness_%`), MAX(`liveness_%`), AVG(`liveness_%`),
+  MIN(`speechiness_%`), MAX(`speechiness_%`), AVG(`speechiness_%`)
+FROM `spotify2023_base.technical_info_clean`;
+```
 
-Competition (Apple, Deezer, Shazam):
+**Función:** Revisar rangos y promedios para variables técnicas de las canciones, ayudando a identificar posibles outliers.
 
-MIN = 0 es esperado (canciones sin presencia).
+---
 
-MAX ayuda a encontrar las canciones más populares.
+## 7. Estadísticas de columnas enteras en competition_info_clean
 
-AVG indica el promedio de exposición en cada plataforma.
+```sql
+SELECT
+  MIN(in_apple_playlists), MAX(in_apple_playlists), AVG(in_apple_playlists),
+  MIN(in_apple_charts), MAX(in_apple_charts), AVG(in_apple_charts),
+  MIN(in_deezer_playlists), MAX(in_deezer_playlists), AVG(in_deezer_playlists),
+  MIN(in_deezer_charts), MAX(in_deezer_charts), AVG(in_deezer_charts),
+  MIN(in_shazam_charts), MAX(in_shazam_charts), AVG(in_shazam_charts)
+FROM `spotify2023_base.competition_info_clean`;
+```
 
-4. Principales hallazgos
+**Función:** Evaluar el comportamiento de métricas de popularidad en distintas plataformas, detectando posibles registros atípicos o inconsistentes.
 
-Se detectó un registro en streams con valores de tokens técnicos en lugar de números → fue reemplazado por 0.
+---
 
-En artist_s__name, se identificó que algunos artistas estaban listados como cadenas separadas por comas. Lo correcto sería dividirlos en múltiples filas en lugar de eliminar la coma.
+**Resumen:** Estas consultas permiten:
 
-Variables como mode (solo contiene “major” y “minor”) no requieren estandarización, pero se verificó su consistencia con REGEXP_REPLACE.
-
-Las métricas de MIN, MAX y AVG permiten identificar canciones con desempeño extremo y posibles errores de carga en las tablas.
+* Limpiar y estandarizar variables categóricas (nombres de artistas, modo).
+* Detectar duplicados en columnas clave.
+* Revisar rangos y promedios para columnas numéricas, facilitando la identificación de valores atípicos.
+* Mejorar la consistencia y calidad del dataset para análisis posteriores.
